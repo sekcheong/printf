@@ -13,14 +13,13 @@ namespace Axiom
 		//http://www.cplusplus.com/reference/cstdio/printf/
 		//%[flags][width][.precision][length]specifier
 
-		private static string FORMAT_SPECIFIERS = @"%(-+ 0)?(\d+|\*)?(\.(\d+)|\*)?([diuoxXfFeEgGaAcsp%])|%t\[.+\]";
+		private static string FORMAT_SPECIFIERS = @"\%(\d*\$)?([\'\#\-\+ ]*)(\d*)(?:\.(\d+))?([hl])?([dioxXucsfeEgGpn%])|\%t\[.+\]";
 		private static Regex _formatRegex = new Regex(FORMAT_SPECIFIERS, RegexOptions.Compiled);
-
 
 		[FlagsAttribute]
 		private enum Flags
 		{
-			NONE,
+			RIGHT_JUSTIFY,            //<the default>
 			LEFT_JUSTIFY,             //-
 			LEADING_ZERO_FILL,        //0
 			PRINT_PLUS,			      //+
