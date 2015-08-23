@@ -12,22 +12,77 @@ namespace Axiom
 	{
 		//http://www.cplusplus.com/reference/cstdio/printf/
 		//%[flags][width][.precision][length]specifier
-		
-		private static string FORMAT_SPECIFIERS = @"%(\d+\$)?(-+ 0)?(\d+)?(\.\d+)?([diuoxXfFeEgGaAcsp%])|%t\[.+\]";
+
+		private static string FORMAT_SPECIFIERS = @"%(-+ 0)?(\d+|\*)?(\.(\d+)|\*)?([diuoxXfFeEgGaAcsp%])|%t\[.+\]";
 		private static Regex _formatRegex = new Regex(FORMAT_SPECIFIERS, RegexOptions.Compiled);
 
 
 		[FlagsAttribute]
-		private static enum Flags
+		private enum Flags
 		{
-			LEFT_JUSTIFY = 0,        //-
-			LEADING_ZERO_FILL = 1,   //0
-			PRINT_PLUS = 2,			 //+
-			INVISIBLE_PLUS_SIGN = 4  //<space>
+			NONE,
+			LEFT_JUSTIFY,             //-
+			LEADING_ZERO_FILL,        //0
+			PRINT_PLUS,			      //+
+			INVISIBLE_PLUS_SIGN       //<space>
 		}
 
 
-		private static bool ParseFormatString(string format, out List<string> tokens, out List<int> fmtIndexes)
+		private enum SpecifierType
+		{
+			SIGNED_INT,               //d, i
+			UNSIGNED_INT,             //u  
+			UNSIGNED_OCT,             //o
+			UNSINGED_HEX,             //h    
+			UNSIGNED_HEX_UPPER,       //H  
+			FLOAT,                    //f  
+			FLOAT_UPPER,              //F
+			SCIENTIFIC,               //e
+			SCIENTIFIC_UPPER,         //E
+			GENERAL,                  //g
+			GENERAL_UPPER,            //G
+			CHAR,                     //c
+			STRING,                   //s
+			PERCENT,                  //%
+			DATE_TIME,                //t
+		}
+
+
+		private class FormatSpecification
+		{
+			public Flags Flags { get; set; }
+			public int Width { get; set; }
+			public int Precision { get; set; }
+			public int Length { get; set; }
+			public SpecifierType Specifier { get; set; }
+			public int Index { get; set; }
+
+			public string Format(object o)
+			{
+				switch (this.Specifier) {
+					case SpecifierType.SIGNED_INT:
+					case SpecifierType.UNSIGNED_INT:
+					case SpecifierType.UNSIGNED_OCT:
+					case SpecifierType.UNSINGED_HEX:
+					case SpecifierType.UNSIGNED_HEX_UPPER:
+					case SpecifierType.FLOAT:
+					case SpecifierType.FLOAT_UPPER:
+					case SpecifierType.SCIENTIFIC:
+					case SpecifierType.SCIENTIFIC_UPPER:
+					case SpecifierType.GENERAL:
+					case SpecifierType.GENERAL_UPPER:
+					case SpecifierType.CHAR:
+					case SpecifierType.STRING:
+					case SpecifierType.PERCENT:
+					case SpecifierType.DATE_TIME:
+						break;
+				}
+				return null;
+			}
+		}
+
+
+		private static bool ParseFormatString(string format, object[] args, out List<string> tokens, out List<int> fmtIndexes)
 		{
 			tokens = null;
 			fmtIndexes = null;
@@ -67,7 +122,7 @@ namespace Axiom
 			List<int> fmtIndexes;
 			int count = 0;
 
-			if (!ParseFormatString(format, out tokens, out fmtIndexes)) return null;
+			if (!ParseFormatString(format, args, out tokens, out fmtIndexes)) return null;
 
 			if (fmtIndexes.Count > args.Length) throw new InvalidOperationException("Insufficient number of arguments");
 
