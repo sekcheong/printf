@@ -55,6 +55,7 @@ x64/
 lib/
 bin/
 obj/
+.pdb/
 unity.cc
 java/crossbuild/.vagrant
 .vagrant/
