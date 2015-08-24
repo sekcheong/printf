@@ -105,8 +105,15 @@ namespace Axiom
 					case SpecifierType.PERCENT:
 						return "%";
 					case SpecifierType.DATE_TIME:
-						DateTime d = (DateTime)o;
-						return FormatString(d.ToString(this.FomratString));
+						if (o is TimeSpan) {
+							TimeSpan d = (TimeSpan)o;
+							return FormatString(d.ToString(this.FomratString));
+						}
+						if (o is DateTime) {
+							DateTime d = (DateTime)o;
+							return FormatString(d.ToString(this.FomratString));
+						}
+						return o.ToString();
 				}
 				return null;
 			}
@@ -171,7 +178,7 @@ namespace Axiom
 			if (!string.IsNullOrEmpty(str)) {			
 				if (str == "*") {
 					//make the value as int.MinValue which will be resolved later by reading
-					//the the preceeding argument
+					//the preceding argument
 					fs.Width = int.MinValue;
 				}
 				else {
@@ -195,7 +202,7 @@ namespace Axiom
 			if (!string.IsNullOrEmpty(str)) {
 				if (str == "*") {
 					//make the value as int.MinValue which will be resolved later by reading
-					//the the preceeding argument
+					//the preceding argument
 					fs.Precision = int.MinValue;
 				}
 				else {
@@ -299,6 +306,11 @@ namespace Axiom
 				if (fs.Width == int.MinValue) {
 					if (!(argPos < args.Length) || !(args[argPos] is int)) throw new Exception("printf width parameter was not provided");
 					fs.Width = (int)args[argPos];
+					argPos = argPos + 1;
+				}
+				if (fs.Precision == int.MinValue) {
+					if (!(argPos < args.Length) || !(args[argPos] is int)) throw new Exception("printf precision parameter was not provided");
+					fs.Precision = (int)args[argPos];
 					argPos = argPos + 1;
 				}
 				tokens.Add(fs.Format(args[argPos]));
