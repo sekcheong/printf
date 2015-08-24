@@ -12,18 +12,21 @@ namespace Axiom
 	{
 		//http://www.cplusplus.com/reference/cstdio/printf/
 		//%[flags][width][.precision][length]specifier
+		//  2      3      4           5      6
 
-		private static string FORMAT_SPECIFIERS = @"\%(\d*\$)?([\'\#\-\+ ]*)(\d*)(?:\.(\d+))?([hl])?([dioxXucsfeEgGpn%])|\%t\[.+\]";
+		private static string FORMAT_SPECIFIERS = @"\%(\d*\$)?([\,\#\-\+ ]*)(\d*)(?:\.(\d+))?([hl])?([dioxXucsfeEgGpn%])|\%t\[.+\]";
 		private static Regex _formatRegex = new Regex(FORMAT_SPECIFIERS, RegexOptions.Compiled);
 
 		[FlagsAttribute]
 		private enum Flags
 		{
-			RIGHT_JUSTIFY,            //<the default>
-			LEFT_JUSTIFY,             //-
-			LEADING_ZERO_FILL,        //0
-			PRINT_PLUS,			      //+
-			INVISIBLE_PLUS_SIGN       //<space>
+			NONE = 0,                      //<the default>
+			LEFT_JUSTIFY = 1,              //-
+			LEADING_ZERO_FILL = 2,         //0
+			FORCE_SIGN = 4,			       //+
+			INVISIBLE_PLUS_SIGN = 8,       //<space>
+			GROUP_THOUSANDS = 16,          //, 
+			ALTERNATE = 32                 //#
 		}
 
 
@@ -46,15 +49,21 @@ namespace Axiom
 			DATE_TIME,                //t
 		}
 
+		private enum LengthType
+		{
+			NONE,
+			SHORT,
+			LONG
+		}
 
 		private class FormatSpecification
 		{
 			public Flags Flags { get; set; }
 			public int Width { get; set; }
 			public int Precision { get; set; }
-			public int Length { get; set; }
+			public LengthType Length { get; set; }
+			public char PaddingChar { get; set; }
 			public SpecifierType Specifier { get; set; }
-			public int Index { get; set; }
 
 			public string Format(object o)
 			{
@@ -80,24 +89,150 @@ namespace Axiom
 			}
 		}
 
+		private static bool ParseFormatSpec(Match format, object[] args, int pos, out int argPos)
+		{
 
-		private static bool ParseFormatString(string format, object[] args, out List<string> tokens, out List<int> fmtIndexes)
+			FormatSpecification fs = new FormatSpecification();
+			argPos = pos;
+			string str = format.Groups[2].Value;
+
+			if (str.Contains("-")) fs.Flags |= Flags.LEFT_JUSTIFY;
+			if (str.Contains("+")) fs.Flags |= Flags.FORCE_SIGN;
+			if (str.Contains("#")) fs.Flags |= Flags.ALTERNATE;
+			if (str.Contains(" ")) {
+				if ((fs.Flags & Flags.FORCE_SIGN) == 0) {
+					fs.Flags |= Flags.INVISIBLE_PLUS_SIGN;
+				}
+			}
+
+			//parse the width field
+			str = format.Groups[3].Value;
+			if (!string.IsNullOrEmpty(str)) {
+				if (str.StartsWith("0")) fs.Flags |= Flags.LEADING_ZERO_FILL;
+				if (str == "*") {
+					if (!(pos < args.Length) || !(args[pos] is int)) throw new Exception("printf invalid width parameter");
+					fs.Width = (int)args[pos];
+					argPos = pos + 1;
+				}
+				else {
+					try {
+						fs.Width = int.Parse(str);
+					}
+					catch (Exception ex) {
+						throw new Exception("printf invalid width parameter", ex);
+					}
+				}
+			}
+
+			fs.PaddingChar = ' ';
+			//leading 0 only applies to right justify, for left justify we use ' ' 
+			if ((fs.Flags & Flags.LEADING_ZERO_FILL) != 0 && (fs.Flags & Flags.LEFT_JUSTIFY) == 0) {
+				fs.PaddingChar = '0';
+			}
+
+			//parse the precision field
+			str = format.Groups[4].Value;
+			if (!string.IsNullOrEmpty(str)) {
+				if (str == "*") {
+					if (!(pos < args.Length) || !(args[pos] is int)) throw new Exception("printf invalid precision parameter");
+					fs.Width = (int)args[pos];
+					argPos = pos + 1;
+				}
+				else {
+					try {
+						fs.Width = int.Parse(str);
+					}
+					catch (Exception ex) {
+						throw new Exception("printf invalid precision parameter", ex);
+					}
+				}
+			}
+
+			//parse the length field
+			str = format.Groups[5].Value;
+			if (!string.IsNullOrEmpty(str)) {
+				switch (str) {
+					case "h": fs.Length = LengthType.SHORT;
+						break;
+					case "l": fs.Length = LengthType.LONG;
+						break;
+					default:
+						fs.Length = LengthType.NONE;
+						break;
+				}
+			}
+
+			//parse the specifier 
+			str = format.Groups[6].Value;
+			switch (str[0]) {
+				case 'd':
+				case 'i':
+					fs.Specifier = SpecifierType.SIGNED_INT;               //d, i
+					break;
+				case 'u':
+					fs.Specifier = SpecifierType.UNSIGNED_INT;             //u  
+					break;
+				case 'o':
+					fs.Specifier = SpecifierType.UNSIGNED_OCT;             //o
+					break;
+				case 'h':
+					fs.Specifier = SpecifierType.UNSINGED_HEX;             //h    
+					break;
+				case 'H':
+					fs.Specifier = SpecifierType.UNSIGNED_HEX_UPPER;       //H  
+					break;
+				case 'f':
+					fs.Specifier = SpecifierType.FLOAT;                    //f  
+					break;
+				case 'F':
+					fs.Specifier = SpecifierType.FLOAT_UPPER;             //F
+					break;
+				case 'e':
+					fs.Specifier = SpecifierType.SCIENTIFIC;               //e
+					break;
+				case 'E':
+					fs.Specifier = SpecifierType.SCIENTIFIC_UPPER;         //E
+					break;
+				case 'g':
+					fs.Specifier = SpecifierType.GENERAL;                  //g
+					break;
+				case 'G':
+					fs.Specifier = SpecifierType.GENERAL_UPPER;            //G
+					break;
+				case 'c':
+					fs.Specifier = SpecifierType.CHAR;                     //c
+					break;
+				case 's':
+					fs.Specifier = SpecifierType.STRING;                   //s
+					break;
+				case '%':
+					fs.Specifier = SpecifierType.PERCENT;                  //%
+					break;
+				case 't':
+					fs.Specifier = SpecifierType.DATE_TIME;                //t
+					break;
+			}
+			return true;
+		}
+
+		private static bool ParseFormatString(string format, object[] args, out List<string> tokens, out Dictionary<int, FormatSpecification> fmts)
 		{
 			tokens = null;
-			fmtIndexes = null;
+			fmts = null;
 			MatchCollection matches = _formatRegex.Matches(format);
 			if (matches.Count == 0) return false;
 
 			int lastEnd = 0;
+			int argPos = 0;
 			tokens = new List<string>();
-			fmtIndexes = new List<int>();
+			fmts = new Dictionary<int, FormatSpecification>();
 
 			foreach (Match m in matches) {
 				if (lastEnd < m.Index) {
 					tokens.Add(format.Substring(lastEnd, m.Index - lastEnd));
 				}
 				tokens.Add(m.Value);
-				fmtIndexes.Add(tokens.Count - 1);
+				//fmtIndexes.Add(tokens.Count - 1);
 				lastEnd = m.Index + m.Value.Length;
 			}
 
@@ -118,17 +253,17 @@ namespace Axiom
 		private static List<string> sbprintf(string format, object[] args)
 		{
 			List<string> tokens;
-			List<int> fmtIndexes;
+			Dictionary<int, FormatSpecification> fmts;
 			int count = 0;
 
-			if (!ParseFormatString(format, args, out tokens, out fmtIndexes)) return null;
+			if (!ParseFormatString(format, args, out tokens, out fmts)) return null;
 
-			if (fmtIndexes.Count > args.Length) throw new InvalidOperationException("Insufficient number of arguments");
+			//foreach (var f in fmts) 
+			//{
 
-			foreach (int q in fmtIndexes) {
-				tokens[q] = formatValue(tokens[q], args[count]);
-				count++;
-			}
+			//	//tokens[q] = formatValue(tokens[q], args[count]);
+			//	count++;
+			//}
 			Console.WriteLine("");
 			return null;
 		}
