@@ -69,33 +69,81 @@ namespace Axiom
 			{
 				switch (this.Specifier) {
 					case SpecifierType.SIGNED_INT:
+						return FormatNumber("d", o);
 					case SpecifierType.UNSIGNED_INT:
+						return FormatNumber("d", o);
 					case SpecifierType.UNSIGNED_OCT:
+						return FormatNumber("o", o);
 					case SpecifierType.UNSINGED_HEX:
+						return FormatNumber("x", o);
 					case SpecifierType.UNSIGNED_HEX_UPPER:
+						return FormatNumber("X", o);
 					case SpecifierType.FLOAT:
+						return FormatNumber("f", o);
 					case SpecifierType.FLOAT_UPPER:
+						return FormatNumber("F", o);
 					case SpecifierType.SCIENTIFIC:
+						return FormatNumber("e", o);
 					case SpecifierType.SCIENTIFIC_UPPER:
+						return FormatNumber("E", o);
 					case SpecifierType.GENERAL:
+						return FormatNumber("g", o);
 					case SpecifierType.GENERAL_UPPER:
+						return formatValue("G", o);
 					case SpecifierType.CHAR:
+						if (o is int) {
+							return FormatString(((char)((int)o)).ToString());
+						}
+						return FormatString(o.ToString());
 					case SpecifierType.STRING:
+						return FormatString(o.ToString());
 					case SpecifierType.PERCENT:
+						return "%";
 					case SpecifierType.DATE_TIME:
 						break;
 				}
 				return null;
 			}
+
+			private string FormatNumber(string specifier, object Value)
+			{
+				if (specifier == "d" || specifier=="f" || specifier == "u") {
+					if ((this.Flags & Util.Flags.GROUP_THOUSANDS) != 0) specifier = "n";
+				}
+				string str = "{0:" + specifier + this.Precision + "}";
+				str = string.Format(str, Value);
+				if ((this.Flags & Util.Flags.FORCE_SIGN)!=0) {
+					if (str[0] != '-') str = "+" + str;
+				}
+				if (str.Length < this.Width) {
+					if ((this.Flags & Util.Flags.LEFT_JUSTIFY) != 0) return str = str.PadRight(this.Width, ' ');
+
+					if (((this.Flags & Util.Flags.LEADING_ZERO_FILL) != 0) && (str[0] == '-' || str[0] == '+')) {
+						return str[0] + str.Substring(1).PadRight(this.Width - 1, '0');
+					}
+					else {
+						return str.PadRight(this.Width, ((this.Flags & Util.Flags.LEADING_ZERO_FILL) != 0) ? '0' : ' ');
+					}
+				}
+				return str;
+			}
+
+			private string FormatString(string value)
+			{
+				if (this.Width > value.Length) {
+					if ((this.Flags & Util.Flags.LEFT_JUSTIFY)!=0) return value.PadRight(this.Width);
+					return value.PadLeft(this.Width);
+				}
+				return value;
+			}
 		}
 
-		private static bool ParseFormatSpec(Match format, object[] args, int pos, out int argPos)
+
+
+		private static void ParseFormatSpec(Match format, object[] args, ref int argPos, out FormatSpecification fs )
 		{
-
-			FormatSpecification fs = new FormatSpecification();
-			argPos = pos;
+			fs = new FormatSpecification();
 			string str = format.Groups[2].Value;
-
 			if (str.Contains("-")) fs.Flags |= Flags.LEFT_JUSTIFY;
 			if (str.Contains("+")) fs.Flags |= Flags.FORCE_SIGN;
 			if (str.Contains("#")) fs.Flags |= Flags.ALTERNATE;
@@ -110,9 +158,9 @@ namespace Axiom
 			if (!string.IsNullOrEmpty(str)) {
 				if (str.StartsWith("0")) fs.Flags |= Flags.LEADING_ZERO_FILL;
 				if (str == "*") {
-					if (!(pos < args.Length) || !(args[pos] is int)) throw new Exception("printf invalid width parameter");
-					fs.Width = (int)args[pos];
-					argPos = pos + 1;
+					if (!(argPos < args.Length) || !(args[argPos] is int)) throw new Exception("printf invalid width parameter");
+					fs.Width = (int)args[argPos];
+					argPos = argPos + 1;
 				}
 				else {
 					try {
@@ -134,9 +182,9 @@ namespace Axiom
 			str = format.Groups[4].Value;
 			if (!string.IsNullOrEmpty(str)) {
 				if (str == "*") {
-					if (!(pos < args.Length) || !(args[pos] is int)) throw new Exception("printf invalid precision parameter");
-					fs.Width = (int)args[pos];
-					argPos = pos + 1;
+					if (!(argPos < args.Length) || !(args[argPos] is int)) throw new Exception("printf invalid precision parameter");
+					fs.Width = (int)args[argPos];
+					argPos = argPos + 1;
 				}
 				else {
 					try {
@@ -185,7 +233,7 @@ namespace Axiom
 					fs.Specifier = SpecifierType.FLOAT;                    //f  
 					break;
 				case 'F':
-					fs.Specifier = SpecifierType.FLOAT_UPPER;             //F
+					fs.Specifier = SpecifierType.FLOAT_UPPER;              //F
 					break;
 				case 'e':
 					fs.Specifier = SpecifierType.SCIENTIFIC;               //e
@@ -212,14 +260,15 @@ namespace Axiom
 					fs.Specifier = SpecifierType.DATE_TIME;                //t
 					break;
 			}
-			return true;
 		}
+
 
 		private static bool ParseFormatString(string format, object[] args, out List<string> tokens, out Dictionary<int, FormatSpecification> fmts)
 		{
 			tokens = null;
 			fmts = null;
 			MatchCollection matches = _formatRegex.Matches(format);
+			FormatSpecification fs;
 			if (matches.Count == 0) return false;
 
 			int lastEnd = 0;
@@ -231,8 +280,9 @@ namespace Axiom
 				if (lastEnd < m.Index) {
 					tokens.Add(format.Substring(lastEnd, m.Index - lastEnd));
 				}
-				tokens.Add(m.Value);
-				//fmtIndexes.Add(tokens.Count - 1);
+				ParseFormatSpec(m, args, ref argPos, out fs);
+				tokens.Add(fs.Format(args[argPos]));
+				argPos++;
 				lastEnd = m.Index + m.Value.Length;
 			}
 
