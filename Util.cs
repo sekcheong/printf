@@ -191,12 +191,6 @@ namespace Axiom
 				}
 			}
 
-			//fs.PaddingChar = ' ';
-			////leading 0 only applies to right justify, for left justify we use ' ' 
-			//if ((fs.Flags & Flags.LEADING_ZERO_FILL) != 0 && (fs.Flags & Flags.LEFT_ALIGNED) == 0) {
-			//	fs.PaddingChar = '0';
-			//}
-
 			//parse the precision field
 			str = match.Groups[4].Value;
 			if (!string.IsNullOrEmpty(str)) {
