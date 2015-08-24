@@ -12,8 +12,10 @@ namespace printf
 	class Program
 	{
 		static void Main(string[] args)
-		{
-			Util.printf("%+-007.5hf Hello World\n Name: %,s Number%0d abcd %t[hh:mm] 1234", "John", 100, "A", DateTime.Now);
+		{			
+			Util.printf("Integer: %X\nDouble: %20.2e\n", 312215, -108880.12945);
+			Util.printf("Date  : %*[MM:dd:yyyy]t\n", 20, DateTime.Now);
+			Console.WriteLine();
 		}
 	}
 }
