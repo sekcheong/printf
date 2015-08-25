@@ -10,14 +10,16 @@ namespace Axiom
 {
 	public static class Util
 	{
-		//http://www.cplusplus.com/reference/cstdio/printf/
+		//standard C format string: 
 		//%[flags][width][.precision][length]specifier
-		//  2      3      4           5      6
+		//http://www.cplusplus.com/reference/cstdio/printf/
+		
 
 		private static string FORMAT_SPECIFIERS = @"\%(\d*\$)?([\,\#\-\+0 ]*)(\d*|\*)(?:\.(\d+|\*))?([hl])?(\[(.+)\])?([dioxXucsfeEgGpnt%])";
-		//%[flags][width][.precision][length][datetime]specifier
-		//  2      3      4           5       7        8
+		//Fields:      %[flags][width][.precision][length][custom format string]specifier
+		//Regex Group:  2      3      4           5       7                     8
 		private static Regex _formatRegex = new Regex(FORMAT_SPECIFIERS, RegexOptions.Compiled);
+
 
 		[FlagsAttribute]
 		private enum Flags
@@ -66,44 +68,198 @@ namespace Axiom
 			public int Width { get; set; }
 			public int Precision { get; set; }
 			public LengthType Length { get; set; }
-			//public char PaddingChar { get; set; }
 			public string FomratString { get; set; }
 			public SpecifierType Specifier { get; set; }
+
+
+			public FormatSpecification()
+			{
+
+			}
+
+
+			public FormatSpecification(Match match)
+			{
+				this.Parse(match);
+			}
+
+
+			public void Parse(Match match)
+			{
+
+				this.Flags = Util.Flags.NONE;
+				this.Width = int.MinValue;
+				this.Precision = int.MinValue;
+				this.Length = LengthType.NONE;
+
+				string str = match.Groups[2].Value;
+				if (str.Contains("-")) this.Flags |= Flags.LEFT_ALIGNED;
+				if (str.Contains("+")) this.Flags |= Flags.FORCE_SIGN;
+				if (str.Contains("#")) this.Flags |= Flags.ALTERNATE;
+				if (str.Contains("0")) this.Flags |= Flags.LEADING_ZERO_FILL;
+				if (str.Contains(",")) this.Flags |= Flags.GROUP_THOUSANDS;
+
+				if (str.Contains(" ")) {
+					if ((this.Flags & Flags.FORCE_SIGN) == 0) {
+						//force + overrides the invisible zero sign, set INVISIBLE_PLUS_SIGN
+						//only if FORCE_SIGN is not set
+						this.Flags = Flags.INVISIBLE_PLUS_SIGN;
+					}
+				}
+
+				//parse the width field
+				str = match.Groups[3].Value;
+				if (!string.IsNullOrEmpty(str)) {
+					if (str == "*") {
+						//make the value as int.MinValue which will be resolved later by reading
+						//the preceding argument
+						this.Width = int.MinValue;
+					}
+					else {
+						try {
+							this.Width = int.Parse(str);
+						}
+						catch (Exception ex) {
+							throw new Exception("printf invalid width parameter", ex);
+						}
+					}
+				}
+
+				//parse the precision field
+				str = match.Groups[4].Value;
+				if (!string.IsNullOrEmpty(str)) {
+					if (str == "*") {
+						//make the value as int.MinValue which will be resolved later by reading
+						//the preceding argument
+						this.Precision = int.MinValue;
+					}
+					else {
+						try {
+							this.Precision = int.Parse(str);
+						}
+						catch (Exception ex) {
+							throw new Exception("printf invalid precision parameter", ex);
+						}
+					}
+				}
+
+				//parse the length field
+				str = match.Groups[5].Value;
+				if (!string.IsNullOrEmpty(str)) {
+					switch (str) {
+						case "h": this.Length = LengthType.SHORT;
+							break;
+						case "l": this.Length = LengthType.LONG;
+							break;
+						default:
+							this.Length = LengthType.NONE;
+							break;
+					}
+				}
+
+				//the custom formatting string
+				this.FomratString = match.Groups[7].Value;
+
+
+				//parse the specifier 
+				str = match.Groups[8].Value;
+				switch (str[0]) {
+					case 'd':
+					case 'i':
+						this.Specifier = SpecifierType.SIGNED_INT;               //d, i
+						break;
+					case 'u':
+						this.Specifier = SpecifierType.UNSIGNED_INT;             //u  
+						break;
+					case 'o':
+						this.Specifier = SpecifierType.UNSIGNED_OCT;             //o
+						break;
+					case 'x':
+						this.Specifier = SpecifierType.UNSINGED_HEX;             //x    
+						break;
+					case 'X':
+						this.Specifier = SpecifierType.UNSIGNED_HEX_UPPER;       //X 
+						break;
+					case 'f':
+						this.Specifier = SpecifierType.FLOAT;                    //f  
+						break;
+					case 'F':
+						this.Specifier = SpecifierType.FLOAT_UPPER;              //F
+						break;
+					case 'e':
+						this.Specifier = SpecifierType.SCIENTIFIC;               //e
+						break;
+					case 'E':
+						this.Specifier = SpecifierType.SCIENTIFIC_UPPER;         //E
+						break;
+					case 'g':
+						this.Specifier = SpecifierType.GENERAL;                  //g
+						break;
+					case 'G':
+						this.Specifier = SpecifierType.GENERAL_UPPER;            //G
+						break;
+					case 'c':
+						this.Specifier = SpecifierType.CHAR;                     //c
+						break;
+					case 's':
+						this.Specifier = SpecifierType.STRING;                   //s
+						break;
+					case 't':
+						this.Specifier = SpecifierType.DATE_TIME;                //t
+						break;
+					case '%':
+						this.Specifier = SpecifierType.PERCENT;                  //%
+						break;
+				}
+			}
+
 
 			public string Format(object o)
 			{
 				switch (this.Specifier) {
 					case SpecifierType.SIGNED_INT:
 						return FormatNumber("d", o);
+
 					case SpecifierType.UNSIGNED_INT:
 						return FormatNumber("d", o);
+
 					case SpecifierType.UNSIGNED_OCT:
-						return FormatNumber("o", o);
+						return FormatString(Convert.ToString((long)o, 8));
+
 					case SpecifierType.UNSINGED_HEX:
 						return FormatNumber("x", o);
+
 					case SpecifierType.UNSIGNED_HEX_UPPER:
 						return FormatNumber("X", o);
+
 					case SpecifierType.FLOAT:
 						return FormatNumber("f", o);
+
 					case SpecifierType.FLOAT_UPPER:
 						return FormatNumber("F", o);
+
 					case SpecifierType.SCIENTIFIC:
 						return FormatNumber("e", o);
+
 					case SpecifierType.SCIENTIFIC_UPPER:
 						return FormatNumber("E", o);
+
 					case SpecifierType.GENERAL:
 						return FormatNumber("g", o);
+
 					case SpecifierType.GENERAL_UPPER:
-						return formatValue("G", o);
+						return FormatNumber("G", o);
+
 					case SpecifierType.CHAR:
-						if (o is int) {
-							return FormatString(((char)((int)o)).ToString());
-						}
+						if (o is int) return FormatString(((char)((int)o)).ToString());						
 						return FormatString(o.ToString());
+
 					case SpecifierType.STRING:
 						return FormatString(o.ToString());
+
 					case SpecifierType.PERCENT:
 						return "%";
+
 					case SpecifierType.DATE_TIME:
 						if (o is TimeSpan) {
 							TimeSpan d = (TimeSpan)o;
@@ -118,16 +274,23 @@ namespace Axiom
 				return null;
 			}
 
+
+
 			private string FormatNumber(string specifier, object Value)
 			{
 				if (specifier == "d" || specifier == "f" || specifier == "u") {
 					if ((this.Flags & Util.Flags.GROUP_THOUSANDS) != 0) specifier = "n";
 				}
-				string str = "{0:" + specifier + this.Precision + "}";
+
+				string str = "{0:" + specifier + ((this.Precision != int.MinValue) ? this.Precision.ToString() : "") + "}";
 				str = string.Format(str, Value);
-				if ((this.Flags & Util.Flags.FORCE_SIGN) != 0) {
-					if (str[0] != '-') str = "+" + str;
+
+				if ((this.Flags & Util.Flags.FORCE_SIGN) != 0 && str[0] != '-') {
+					if ((this.Specifier & SpecifierType.UNSINGED_HEX) == 0 && (this.Specifier & SpecifierType.UNSIGNED_HEX_UPPER) == 0) {
+						str = "+" + str;
+					}
 				}
+
 				if (str.Length < this.Width) {
 					if ((this.Flags & Util.Flags.LEFT_ALIGNED) != 0) return str = str.PadRight(this.Width, ' ');
 					//right aligned?
@@ -141,6 +304,8 @@ namespace Axiom
 				return str;
 			}
 
+
+
 			private string FormatString(string value)
 			{
 				if (this.Width > value.Length) {
@@ -149,6 +314,8 @@ namespace Axiom
 				}
 				return value;
 			}
+			
+
 		}
 
 
@@ -165,7 +332,7 @@ namespace Axiom
 			if (str.Contains("0")) fs.Flags |= Flags.LEADING_ZERO_FILL;
 			if (str.Contains(",")) fs.Flags |= Flags.GROUP_THOUSANDS;
 
-			if (str.Contains(" ")) {				
+			if (str.Contains(" ")) {
 				if ((fs.Flags & Flags.FORCE_SIGN) == 0) {
 					//force + overrides the invisible zero sign, set INVISIBLE_PLUS_SIGN
 					//only if FORCE_SIGN is not set
@@ -175,7 +342,7 @@ namespace Axiom
 
 			//parse the width field
 			str = match.Groups[3].Value;
-			if (!string.IsNullOrEmpty(str)) {			
+			if (!string.IsNullOrEmpty(str)) {
 				if (str == "*") {
 					//make the value as int.MinValue which will be resolved later by reading
 					//the preceding argument
@@ -281,22 +448,22 @@ namespace Axiom
 		}
 
 
-		private static bool ParseFormatString(string format, object[] args, out List<string> tokens)
+		private static bool FormatString(string format, object[] args, out List<string> segments)
 		{
-			tokens = null;
+			segments = null;
 			MatchCollection matches = _formatRegex.Matches(format);
-			FormatSpecification fs;
 			if (matches.Count == 0) return false;
 
 			int lastEnd = 0;
 			int argPos = 0;
-			tokens = new List<string>();
+			segments = new List<string>();
 
 			foreach (Match m in matches) {
 				if (lastEnd < m.Index) {
-					tokens.Add(format.Substring(lastEnd, m.Index - lastEnd));
+					segments.Add(format.Substring(lastEnd, m.Index - lastEnd));
 				}
-				fs = ParseFormatSpec(m);
+
+				FormatSpecification fs = new FormatSpecification(m);				
 				if (fs.Width == int.MinValue) {
 					if (!(argPos < args.Length) || !(args[argPos] is int)) throw new Exception("printf width parameter was not provided");
 					fs.Width = (int)args[argPos];
@@ -307,31 +474,38 @@ namespace Axiom
 					fs.Precision = (int)args[argPos];
 					argPos = argPos + 1;
 				}
-				tokens.Add(fs.Format(args[argPos]));
+				segments.Add(fs.Format(args[argPos]));
+
 				argPos++;
 				lastEnd = m.Index + m.Value.Length;
 			}
 
 			if (lastEnd < format.Length) {
-				tokens.Add(format.Substring(lastEnd));
+				segments.Add(format.Substring(lastEnd));
 			}
 
 			return true;
 		}
 
 
-		private static string formatValue(string format, object value)
-		{
-			return value.ToString();
-		}
-
 
 		private static List<string> sbprintf(string format, object[] args)
 		{
-			List<string> tokens;
-			if (!ParseFormatString(format, args, out tokens)) return null;
-			return tokens;
+			List<string> segments;
+			if (!FormatString(format, args, out segments)) return null;
+			return segments;
 		}
+
+
+
+		public static string sprintf(string format, params object[] args)
+		{
+			if (string.IsNullOrEmpty(format)) return null;
+			List<string> pieces = sbprintf(format, args);
+			if (pieces == null || pieces.Count == 0) return format;
+			return string.Join(null, pieces);
+		}
+
 
 
 		public static int printf(string format, params object[] args)
@@ -342,14 +516,6 @@ namespace Axiom
 			return str.Length;
 		}
 
-
-		public static string sprintf(string format, params object[] args)
-		{
-			if (string.IsNullOrEmpty(format)) return null;
-			List<string> pieces = sbprintf(format, args);
-			if (pieces == null || pieces.Count == 0) return format;
-			return string.Join(null, pieces);
-		}
 
 
 		public static int fprintf(Stream s, string format, params object[] args)
@@ -365,6 +531,7 @@ namespace Axiom
 			s.Write(data, 0, data.Length);
 			return data.Length;
 		}
+
 	}
 
 }
